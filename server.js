@@ -7,6 +7,8 @@ const errorMiddleware = require("./middleware/error_handling");
 const uploadRoute = require("./routes/uploadRoute");
 const authRoute = require("./routes/authRoute");
 const propertyRoute = require("./routes/propertyRoute");
+const rentalRoute = require("./routes/rentalRoute");
+const paymentRoute = require("./routes/paymentRoute");
 
 
 require("./config/db_config.js");
@@ -20,6 +22,8 @@ app.use(express.json());
 app.use("/auth", authRoute);
 app.use("/upload", uploadRoute);
 app.use("/properties", propertyRoute);
+app.use("/rentals", rentalRoute);
+app.use("/payments", paymentRoute);
 
 // Error handling middleware — MUST be last
 app.use(errorMiddleware);
