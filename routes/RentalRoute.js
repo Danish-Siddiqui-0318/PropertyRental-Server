@@ -24,4 +24,9 @@ router.put(
     jwtMiddleWare,
     rentalController.approveRental
 );
+router.put(
+    "/:id/terminate",
+    jwtMiddleWare,
+    rentalController.terminateRental
+);
 module.exports = router;

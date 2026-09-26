@@ -228,16 +228,15 @@ class RentalAgreementModel {
                 .input("AgreementID", sql.Int, agreementId)
                 .input("OwnerID", sql.Int, ownerId)
                 .query(`
-                SELECT
-                    AgreementID,
-                    PropertyID,
-                    OwnerID,
-                    RenterID,
-                    Status
-                FROM RentalAgreements
-                WHERE AgreementID = @AgreementID
-                  AND OwnerID = @OwnerID
-            `);
+                    SELECT AgreementID,
+                           PropertyID,
+                           OwnerID,
+                           RenterID,
+                           Status
+                    FROM RentalAgreements
+                    WHERE AgreementID = @AgreementID
+                      AND OwnerID = @OwnerID
+                `);
 
             if (rentalResult.recordset.length === 0) {
                 await transaction.rollback();
@@ -256,10 +255,10 @@ class RentalAgreementModel {
             const propertyResult = await transaction.request()
                 .input("PropertyID", sql.Int, rental.PropertyID)
                 .query(`
-                SELECT PropertyID, Status
-                FROM Properties
-                WHERE PropertyID = @PropertyID
-            `);
+                    SELECT PropertyID, Status
+                    FROM Properties
+                    WHERE PropertyID = @PropertyID
+                `);
 
             if (propertyResult.recordset.length === 0) {
                 await transaction.rollback();
@@ -278,19 +277,19 @@ class RentalAgreementModel {
             await transaction.request()
                 .input("AgreementID", sql.Int, agreementId)
                 .query(`
-                UPDATE RentalAgreements
-                SET Status = 'Active'
-                WHERE AgreementID = @AgreementID
-            `);
+                    UPDATE RentalAgreements
+                    SET Status = 'Active'
+                    WHERE AgreementID = @AgreementID
+                `);
 
             // 6. Mark property as rented
             await transaction.request()
                 .input("PropertyID", sql.Int, rental.PropertyID)
                 .query(`
-                UPDATE Properties
-                SET Status = 'rented'
-                WHERE PropertyID = @PropertyID
-            `);
+                    UPDATE Properties
+                    SET Status = 'rented'
+                    WHERE PropertyID = @PropertyID
+                `);
 
             // 7. Commit both changes
             await transaction.commit();
@@ -307,6 +306,106 @@ class RentalAgreementModel {
             } catch (rollbackError) {
                 console.error("Rollback error:", rollbackError);
             }
+            throw error;
+        }
+    }
+
+    static async terminateRental(agreementId, ownerId) {
+        const pool = await poolPromise;
+        const transaction = new sql.Transaction(pool);
+
+        try {
+            await transaction.begin();
+
+            // 1. Get rental agreement
+            const rentalResult = await transaction.request()
+                .input("AgreementID", sql.Int, agreementId)
+                .input("OwnerID", sql.Int, ownerId)
+                .query(`
+                SELECT
+                    AgreementID,
+                    PropertyID,
+                    OwnerID,
+                    RenterID,
+                    Status
+                FROM RentalAgreements
+                WHERE AgreementID = @AgreementID
+                  AND OwnerID = @OwnerID
+            `);
+
+            if (rentalResult.recordset.length === 0) {
+                await transaction.rollback();
+
+                return {
+                    error: "RENTAL_NOT_FOUND"
+                };
+            }
+
+            const rental = rentalResult.recordset[0];
+
+            // 2. Rental must be Active
+            if (rental.Status !== "Active") {
+                await transaction.rollback();
+
+                return {
+                    error: "RENTAL_NOT_ACTIVE"
+                };
+            }
+
+            // 3. Check property
+            const propertyResult = await transaction.request()
+                .input("PropertyID", sql.Int, rental.PropertyID)
+                .query(`
+                SELECT
+                    PropertyID,
+                    Status
+                FROM Properties
+                WHERE PropertyID = @PropertyID
+            `);
+
+            if (propertyResult.recordset.length === 0) {
+                await transaction.rollback();
+
+                return {
+                    error: "PROPERTY_NOT_FOUND"
+                };
+            }
+
+            // 4. Terminate rental agreement
+            await transaction.request()
+                .input("AgreementID", sql.Int, agreementId)
+                .query(`
+                    UPDATE RentalAgreements
+                    SET Status = 'Terminated'
+                    WHERE AgreementID = @AgreementID
+                `);
+
+            // 5. Make property available again
+            await transaction.request()
+                .input("PropertyID", sql.Int, rental.PropertyID)
+                .query(`
+                    UPDATE Properties
+                    SET Status = 'available'
+                    WHERE PropertyID = @PropertyID
+                `);
+
+            // 6. Commit both changes
+            await transaction.commit();
+
+            return {
+                error: null,
+                agreementId: rental.AgreementID,
+                propertyId: rental.PropertyID
+            };
+
+        } catch (error) {
+
+            try {
+                await transaction.rollback();
+            } catch (rollbackError) {
+                console.error("Rollback error:", rollbackError);
+            }
+
             throw error;
         }
     }

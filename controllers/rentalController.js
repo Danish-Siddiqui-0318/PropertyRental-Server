@@ -225,3 +225,61 @@ exports.approveRental = async (req, res) => {
         });
     }
 };
+
+exports.terminateRental = async (req, res) => {
+    try {
+
+        // Only owners can terminate rental agreements
+        if (req.user.role !== "owner") {
+            return res.status(403).json({
+                message: "Only owners can terminate rental agreements"
+            });
+        }
+
+        const agreementId = parseInt(req.params.id);
+
+        if (isNaN(agreementId)) {
+            return res.status(400).json({
+                message: "Invalid agreement ID"
+            });
+        }
+
+        const result = await RentalAgreementModel.terminateRental(
+            agreementId,
+            req.user.userId
+        );
+
+        if (result.error === "RENTAL_NOT_FOUND") {
+            return res.status(404).json({
+                message: "Rental agreement not found"
+            });
+        }
+
+        if (result.error === "RENTAL_NOT_ACTIVE") {
+            return res.status(400).json({
+                message: "Only active rental agreements can be terminated"
+            });
+        }
+
+        if (result.error === "PROPERTY_NOT_FOUND") {
+            return res.status(404).json({
+                message: "Property not found"
+            });
+        }
+
+        res.status(200).json({
+            message: "Rental agreement terminated successfully",
+            agreementId: result.agreementId,
+            propertyId: result.propertyId
+        });
+
+    } catch (error) {
+
+        console.error(error);
+
+        res.status(500).json({
+            message: "Server error",
+            error: error.message
+        });
+    }
+};
